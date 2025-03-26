@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    id 'maven-publish' // 添加 Maven 发布插件
 
 }
 
@@ -31,19 +30,6 @@ android {
     }
 }
 
-// 配置发布信息
-afterEvaluate {
-    publishing {
-        publications {
-            release(MavenPublication) {
-                from components.release // 发布 release 构建产物
-                groupId = 'com.github.azheng' // JitPack 格式要求
-                artifactId = 'androidutils'
-                version = '0.0.1'
-            }
-        }
-    }
-}
 dependencies {
 
     compileOnly  libs.androidx.core.ktx

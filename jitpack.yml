@@ -1,0 +1,5 @@
+# jitpack.yml
+jdk:
+  - openjdk18
+env:
+  JAVA_HOME: /usr/lib/jvm/java-18-openjdk-amd64

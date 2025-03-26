@@ -18,3 +18,15 @@ dependencies {
 	        implementation 'com.github.RookieExaminer:AndroidUtils:0.0.3'
 }
 ```
+
+在 Application 初始化 Utils
+
+```
+class MyApplication : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // 初始化Utils
+        Utils.init(this)
+    }
+}
+```

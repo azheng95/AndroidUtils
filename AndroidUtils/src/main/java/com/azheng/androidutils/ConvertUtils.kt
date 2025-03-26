@@ -15,9 +15,8 @@ import java.io.ByteArrayOutputStream
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
 
-class ConvertUtils {
+object ConvertUtils {
 
-    companion object {
         /* 单位转换 */
         fun dp2px( dp: Float): Int {
             val metrics = Utils.getApplication().resources.displayMetrics
@@ -120,4 +119,3 @@ class ConvertUtils {
             return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }
     }
-}

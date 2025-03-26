@@ -11,10 +11,6 @@ import androidx.annotation.IntDef
 import androidx.annotation.IntRange
 import androidx.annotation.RequiresApi
 import androidx.collection.SimpleArrayMap
-import com.azheng.androidutils.AppUtils.Companion.getAppVersionCode
-import com.azheng.androidutils.AppUtils.Companion.getAppVersionName
-import com.azheng.androidutils.GsonUtils.Companion.gson4LogUtils
-import com.azheng.androidutils.Utils.Companion.getApplication
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -92,12 +88,12 @@ class LogUtils private constructor() {
 
         init {
             if (isSDCardEnableByEnvironment
-                && getApplication().getExternalFilesDir(null) != null
+                && Utils.getApplication().getExternalFilesDir(null) != null
             ) {
-                defaultDir = getApplication().getExternalFilesDir(null)
+                defaultDir = Utils.getApplication().getExternalFilesDir(null)
                     .toString() + FILE_SEP + "log" + FILE_SEP
             } else {
-                defaultDir = getApplication().filesDir.toString() + FILE_SEP + "log" + FILE_SEP
+                defaultDir = Utils.getApplication().filesDir.toString() + FILE_SEP + "log" + FILE_SEP
             }
         }
 
@@ -465,7 +461,7 @@ class LogUtils private constructor() {
         }
 
         @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
-     private   fun clipData2String(clipData: ClipData, sb: StringBuilder) {
+        private fun clipData2String(clipData: ClipData, sb: StringBuilder) {
             val item = clipData.getItemAt(0)
             if (item == null) {
                 sb.append("ClipData.Item {}")
@@ -508,7 +504,7 @@ class LogUtils private constructor() {
                 return formatJson(`object`.toString())
             }
             return try {
-                gson4LogUtils.toJson(`object`)
+                GsonUtils.gson4LogUtils.toJson(`object`)
             } catch (t: Throwable) {
                 `object`.toString()
             }
@@ -540,7 +536,7 @@ class LogUtils private constructor() {
             try {
                 val xmlInput: Source = StreamSource(StringReader(xml))
                 val xmlOutput = StreamResult(StringWriter())
-                val transformer =transformerFactory.newTransformer()
+                val transformer = transformerFactory.newTransformer()
                 transformer.setOutputProperty(OutputKeys.INDENT, "yes")
                 transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
                 transformer.transform(xmlInput, xmlOutput)
@@ -633,8 +629,8 @@ class LogUtils private constructor() {
             sb.append("Device Model       : ").append(Build.MODEL).append("\n")
             sb.append("Android Version    : ").append(Build.VERSION.RELEASE).append("\n")
             sb.append("Android SDK        : ").append(Build.VERSION.SDK_INT).append("\n")
-            sb.append("App VersionName    : ").append(getAppVersionName()).append("\n")
-            sb.append("App VersionCode    : ").append(getAppVersionCode()).append("\n")
+            sb.append("App VersionName    : ").append(AppUtils.getAppVersionName()).append("\n")
+            sb.append("App VersionCode    : ").append(AppUtils.getAppVersionCode()).append("\n")
 
             sb.append(appended)
             return sb.append(border).append("\n").toString()
@@ -1314,7 +1310,7 @@ class LogUtils private constructor() {
             return objClass
         }
 
-        private    fun isSpace(s: String?): Boolean {
+        private fun isSpace(s: String?): Boolean {
             if (s == null) {
                 return true
             }
@@ -1329,7 +1325,7 @@ class LogUtils private constructor() {
             return true
         }
 
-        private   fun formatJson(json: String, indentSpaces: Int): String {
+        private fun formatJson(json: String, indentSpaces: Int): String {
             try {
                 var i = 0
                 val len = json.length
@@ -1350,7 +1346,7 @@ class LogUtils private constructor() {
             return json
         }
 
-        private    fun getFullStackTrace(throwable: Throwable?): String {
+        private fun getFullStackTrace(throwable: Throwable?): String {
             var throwable = throwable
             val throwableList: MutableList<Throwable> = ArrayList()
             while (throwable != null && !throwableList.contains(throwable)) {
@@ -1422,14 +1418,14 @@ class LogUtils private constructor() {
             }
         }
 
-        private   fun createOrExistsDir(file: File?): Boolean {
+        private fun createOrExistsDir(file: File?): Boolean {
             return file != null && (if (file.exists()) file.isDirectory else file.mkdirs())
         }
 
-        private   val isSDCardEnableByEnvironment: Boolean
+        private val isSDCardEnableByEnvironment: Boolean
             get() = Environment.MEDIA_MOUNTED == Environment.getExternalStorageState()
 
-        private    fun writeFileFromString(
+        private fun writeFileFromString(
             file: File?,
             content: String?,
             append: Boolean
@@ -1458,7 +1454,7 @@ class LogUtils private constructor() {
             }
         }
 
-   private     fun createOrExistsFile(file: File?): Boolean {
+        private fun createOrExistsFile(file: File?): Boolean {
             if (file == null) {
                 return false
             }

@@ -29,7 +29,7 @@ object AppUtils {
      * @return App 图标
      */
     fun getAppIcon(
-        packageName: String = Utils.getApplication().packageName
+        packageName: String = getAppPackageName()
     ): Drawable? {
         return try {
             Utils.getApplication().packageManager.getApplicationIcon(packageName)
@@ -53,7 +53,7 @@ object AppUtils {
      * @param packageName 包名
      * @return App 名称
      */
-    fun getAppName(packageName: String = Utils.getApplication().packageName): String {
+    fun getAppName(packageName: String = getAppPackageName()): String {
         return try {
             val packageManager = Utils.getApplication().packageManager
             val packageInfo = packageManager.getPackageInfo(packageName, 0)

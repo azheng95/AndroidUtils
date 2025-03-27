@@ -27,7 +27,7 @@ object Utils {
      */
     fun getApplication(): Application {
         if (!::application.isInitialized) {
-            throw IllegalStateException("AppUtils未初始化，请在Application的onCreate方法中调用AppUtils.init(this)")
+            throw IllegalStateException("Utils未初始化，请在Application的onCreate方法中调用Utils.init(this)")
         }
         return application
     }

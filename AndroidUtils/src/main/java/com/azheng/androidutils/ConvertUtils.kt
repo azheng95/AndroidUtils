@@ -1,6 +1,5 @@
 package com.azheng.androidutils
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -8,12 +7,11 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
-import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.View
-import java.io.ByteArrayOutputStream
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
+import java.io.ByteArrayOutputStream
 
 object ConvertUtils {
 

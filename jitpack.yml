@@ -1,5 +1,5 @@
 # jitpack.yml
 jdk:
-  - openjdk17
+  - openjdk18
 env:
-  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+  JAVA_HOME: /usr/lib/jvm/java-18-openjdk-amd64

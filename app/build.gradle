@@ -51,6 +51,7 @@ dependencies {
     implementation("dev.androidbroadcast.vbpd:vbpd:2.0.4")
 
     /***********添加以下依赖**********/
+    //https://github.com/Tencent/MMKV
     implementation 'com.tencent:mmkv:1.3.12'
     // Gson 解析容错：https://github.com/getActivity/GsonFactory
     implementation 'com.github.getActivity:GsonFactory:9.6'

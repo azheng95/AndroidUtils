@@ -41,3 +41,15 @@ class MyApplication : Application() {
     }
 }
 ```
+***********添加以下依赖**********
+
+ ```
+    //https://github.com/Tencent/MMKV
+    implementation 'com.tencent:mmkv:1.3.12'
+    // Gson 解析容错：https://github.com/getActivity/GsonFactory
+    implementation 'com.github.getActivity:GsonFactory:9.6'
+    // Json 解析框架：https://github.com/google/gson
+    implementation 'com.google.code.gson:gson:2.12.1'
+    // Kotlin 反射库：用于反射 Kotlin data class 类对象，2.0.0 请修改成当前项目 Kotlin 的版本号
+    implementation 'org.jetbrains.kotlin:kotlin-reflect:2.0.0'
+```

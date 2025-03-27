@@ -1,4 +1,4 @@
-[![](https://jitpack.io/v/RookieExaminer/AndroidUtils.svg)](https://jitpack.io/#RookieExaminer/AndroidUtils)
+[![](https://jitpack.io/v/azheng95/AndroidUtils.svg)](https://jitpack.io/#azheng95/AndroidUtils)
 
 在 `settings.gradle` 文件中加入
 
@@ -26,7 +26,7 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-	        implementation 'com.github.azheng95:AndroidUtils:0.0.4'
+	        implementation 'com.github.azheng95:AndroidUtils:0.0.6'
 }
 ```
 

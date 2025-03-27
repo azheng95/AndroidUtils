@@ -10,6 +10,17 @@ dependencyResolutionManagement {
     }
 }
 ```
+或者在 `settings.gradle.kts` 文件中加入
+
+```groovy
+dependencyResolutionManagement {
+    repositories {
+        // JitPack 远程仓库：https://jitpack.io
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
 
 在项目 app 模块下的 `build.gradle` 文件中加入远程依赖
 

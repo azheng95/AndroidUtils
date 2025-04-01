@@ -15,6 +15,7 @@ import androidx.annotation.Nullable
 import java.io.File
 import java.security.MessageDigest
 import java.util.*
+import kotlin.system.exitProcess
 
 /**
  * App 相关工具类
@@ -273,20 +274,30 @@ object AppUtils {
     }
 
     /**
-     * 重启 App
-     *
+     * 重启应用程序
+     * @param isKillProcess 是否终止当前进程（true=彻底重置，false=仅重建界面）
      */
-    @SuppressLint("MissingPermission")
-    fun relaunchApp() {
-        val intent =
-            Utils.getApplication().packageManager.getLaunchIntentForPackage(getAppPackageName())
-                ?: return
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        Utils.getApplication().startActivity(intent)
-        // 杀掉当前进程
-        val am =
-            Utils.getApplication().getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        am.appTasks.forEach { it.finishAndRemoveTask() }
-        Process.killProcess(Process.myPid())
+    fun relaunchApp(isKillProcess: Boolean = false) {
+        runCatching {
+            // 1. 获取主Activity组件
+            val packageName = Utils.getApplication().packageName
+            val launchIntent =
+                Utils.getApplication().packageManager.getLaunchIntentForPackage(packageName)
+            val componentName = launchIntent?.component ?: return@runCatching
+
+            val intent =  Intent.makeRestartActivityTask(componentName)
+
+            // 3. 启动新任务栈
+            Utils.getApplication().startActivity(intent)
+
+            // 4. 按需终止进程
+            if (isKillProcess) {
+                Process.killProcess(Process.myPid())
+                exitProcess(0)
+            }
+        }.onFailure {
+            LogUtils.e("relaunchApp failed: ${it.message}")
+        }
     }
+
 }

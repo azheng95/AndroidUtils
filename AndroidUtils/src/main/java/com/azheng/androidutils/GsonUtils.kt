@@ -17,10 +17,6 @@ import java.util.concurrent.ConcurrentHashMap
  * 基于 Gson 库 2.12.1 版本
  */
 object GsonUtils {
-    init {
-        //默认使用Gson 解析容错适配器
-        setGsonDelegate()
-    }
 
     // 常量键值定义，用于在 GSONS Map 中存储不同用途的 Gson 实例
     private const val KEY_DEFAULT = "defaultGson"      // 默认 Gson 实例的键
@@ -28,8 +24,12 @@ object GsonUtils {
     private const val KEY_LOG_UTILS = "logUtilsGson"   // 日志专用 Gson 实例的键
 
     // 线程安全的 Map，用于存储不同配置的 Gson 实例
-    private val GSONS: MutableMap<String, Gson?> = ConcurrentHashMap()
+    private val GSONS: MutableMap<String, Gson?> by lazy { ConcurrentHashMap() }
 
+    init {
+        //默认使用Gson 解析容错适配器
+        setGsonDelegate()
+    }
     /**
      * 设置 Gson 的委托实例，优先使用此实例进行序列化/反序列化
      *

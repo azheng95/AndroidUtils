@@ -26,7 +26,7 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-	        implementation 'com.github.azheng95:AndroidUtils:0.0.6'
+	        implementation 'com.github.azheng95:AndroidUtils:0.0.7'
 }
 ```
 

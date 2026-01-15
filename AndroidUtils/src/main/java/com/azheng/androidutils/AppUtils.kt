@@ -300,4 +300,17 @@ object AppUtils {
         }
     }
 
+    /**
+     * 终止APP进程（确保彻底退出）
+     */
+    private fun killAppProcess() {
+        try {
+            // 获取当前进程ID并杀死
+            Process.killProcess(Process.myPid())
+            // 兜底：强制退出虚拟机
+            exitProcess(0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }

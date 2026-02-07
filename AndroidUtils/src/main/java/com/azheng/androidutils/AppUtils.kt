@@ -11,6 +11,7 @@ import android.content.pm.Signature
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Process
+import android.util.Log
 import androidx.annotation.Nullable
 import java.io.File
 import java.security.MessageDigest
@@ -296,7 +297,7 @@ object AppUtils {
                 exitProcess(0)
             }
         }.onFailure {
-            LogUtils.e("relaunchApp failed: ${it.message}")
+            Log.e("AppUtils","relaunchApp failed: ${it.message}")
         }
     }
 

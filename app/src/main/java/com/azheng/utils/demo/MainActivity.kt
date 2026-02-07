@@ -3,6 +3,8 @@ package com.azheng.utils.demo
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.azheng.androidutils.ActivityUtils
+import com.azheng.androidutils.GsonUtils
+import com.azheng.androidutils.LogUtils
 import com.azheng.androidutils.onSingleClick
 import com.azheng.utils.demo.databinding.ActivityMainBinding
 import dev.androidbroadcast.vbpd.viewBinding
@@ -17,6 +19,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         viewBinding.tvTestView.onSingleClick {
+          val json =  GsonUtils.fromJson("123", Int::class.java)
+            LogUtils.d(json)
         }
 
     }

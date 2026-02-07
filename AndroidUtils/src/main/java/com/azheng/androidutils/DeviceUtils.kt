@@ -255,29 +255,25 @@ object DeviceUtils {
      */
     @SuppressLint("HardwareIds")
     fun getUniqueDeviceId(): String {
-        val androidId = getAndroidID()
-        // 生成唯一ID
-        val deviceId = StringBuilder()
-        deviceId.append(androidId)
-        deviceId.append(Build.BOARD)
-        deviceId.append(Build.BRAND)
-        deviceId.append(Build.DEVICE)
-        deviceId.append(Build.HARDWARE)
-        deviceId.append(Build.ID)
-        deviceId.append(Build.MANUFACTURER)
-        deviceId.append(Build.MODEL)
-        deviceId.append(Build.PRODUCT)
-        return UUID.nameUUIDFromBytes(deviceId.toString().toByteArray()).toString()
+        val androidId = Settings.Secure.getString(
+            Utils.getApplication().contentResolver,
+            Settings.Secure.ANDROID_ID
+        ) ?: ""
+
+        // 只使用不会随系统更新改变的硬件信息
+        val deviceInfo = buildString {
+            append(androidId)
+            append(Build.BOARD)
+            append(Build.BRAND)
+            append(Build.DEVICE)
+            append(Build.HARDWARE)
+            append(Build.MANUFACTURER)
+            append(Build.MODEL)
+            append(Build.PRODUCT)
+        }
+        // 使用 UUID v5 (SHA-1) 或直接用 UUID v3
+        return UUID.nameUUIDFromBytes(deviceInfo.toByteArray()).toString()
     }
 
-    /**
-     * 判断是否同一设备
-     *
-     * @param uniqueDeviceId 设备唯一标识
-     * @return `true`: 是<br></br>`false`: 否
-     */
-    fun isSameDevice(uniqueDeviceId: String): Boolean {
-        return getUniqueDeviceId() == uniqueDeviceId
-    }
 }
 

@@ -1,295 +1,345 @@
 package com.azheng.androidutils
 
 import android.app.Activity
+import android.app.Application
 import android.content.Context
-import android.os.Build
+import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import java.lang.reflect.Field
-import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Description: 管理所有的栈中的Activity
+ * Activity管理工具类
+ * 负责管理Activity栈和生命周期监听
  */
-class ActivityUtils private constructor() {
+object ActivityUtils {
 
-    companion object {
-        /**
-         * 存放应用内Activity的列表（仅存储AppCompatActivity）
-         * Kotlin中用mutableMapOf + LinkedHashMap保证插入顺序
-         */
-        private val activities: MutableMap<Class<*>, AppCompatActivity> = LinkedHashMap()
+    // ==================== 生命周期监听相关 ====================
 
-        /**
-         * 添加Activity（仅需传入Activity实例）
-         */
-        fun addActivity(activity: AppCompatActivity?) {
-            activity ?: return
-            if (isAppInternalActivity(activity)) {
+    private val isInitialized = AtomicBoolean(false)
+    private val isListenerRegistered = AtomicBoolean(false)
+    private var application: Application? = null
+    private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+
+    // ==================== Activity栈管理相关 ====================
+
+    /**
+     * 存放应用内Activity的列表（仅存储AppCompatActivity）
+     * 使用同步的LinkedHashMap保证线程安全和插入顺序
+     */
+    private val activities: MutableMap<Class<*>, AppCompatActivity> =
+        Collections.synchronizedMap(LinkedHashMap())
+
+    // ==================== 扩展函数 ====================
+
+    /**
+     * 判断Activity是否存活（未finishing且未destroyed）
+     */
+    private fun AppCompatActivity.isAlive(): Boolean {
+        return !isFinishing && !isDestroyed
+    }
+
+    // ==================== 初始化方法 ====================
+
+    /**
+     * 初始化方法，由Utils.init()调用
+     * @param app Application实例
+     */
+    internal fun init(app: Application) {
+        if (isInitialized.compareAndSet(false, true)) {
+            application = app
+        }
+        // 未注册则注册
+        if (!isListenerRegistered.get()) {
+            registerLifecycleCallbacks()
+        }
+    }
+
+    /**
+     * 注册生命周期监听
+     */
+    private fun registerLifecycleCallbacks() {
+        val app = application ?: return
+
+        lifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                if (activity is AppCompatActivity && isAppInternalActivity(activity)) {
+                    addActivity(activity)
+                }
+            }
+
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+
+            override fun onActivityDestroyed(activity: Activity) {
+                if (activity is AppCompatActivity && isAppInternalActivity(activity)) {
+                    removeActivity(activity)
+                }
+            }
+        }
+
+        if (isListenerRegistered.compareAndSet(false, true)) {
+            app.registerActivityLifecycleCallbacks(lifecycleCallbacks)
+        }
+    }
+
+    /**
+     * 重置状态（用于APP重启后重新初始化）
+     */
+    internal fun reset() {
+        // 注销生命周期监听
+        lifecycleCallbacks?.let {
+            application?.unregisterActivityLifecycleCallbacks(it)
+        }
+        lifecycleCallbacks = null
+
+        // 清空Activity列表
+        synchronized(activities) {
+            activities.clear()
+        }
+
+        // 重置状态标志
+        isInitialized.set(false)
+        isListenerRegistered.set(false)
+        application = null
+    }
+
+    // ==================== Activity栈管理方法 ====================
+
+    /**
+     * 添加Activity（仅需传入Activity实例）
+     */
+    fun addActivity(activity: AppCompatActivity?) {
+        activity ?: return
+        if (isAppInternalActivity(activity)) {
+            synchronized(activities) {
                 activities[activity.javaClass] = activity
             }
         }
+    }
 
-        /**
-         * 判断Activity是否存在（且未销毁）
-         * 仅需传入Activity::class
-         */
-        fun <T : AppCompatActivity> isActivityExist(clz: Class<T>?): Boolean {
-            clz ?: return false
-            val activity = getActivity(clz)
-            activity ?: return false
-            return !(activity.isFinishing || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed))
+    /**
+     * 判断Activity是否存在（且未销毁）
+     */
+    fun <T : AppCompatActivity> isActivityExist(clz: Class<T>?): Boolean {
+        return getActivity(clz)?.isAlive() == true
+    }
+
+    /**
+     * 获得指定activity实例
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T : AppCompatActivity> getActivity(clazz: Class<T>?): T? {
+        clazz ?: return null
+        return synchronized(activities) {
+            activities[clazz] as? T
         }
+    }
 
-        /**
-         * 获得指定activity实例（仅应用内的AppCompatActivity）
-         */
-        @Suppress("UNCHECKED_CAST")
-        fun <T : AppCompatActivity> getActivity(clazz: Class<T>?): T? {
-            clazz ?: return null
-            return activities[clazz] as T?
+    /**
+     * 判断Activity是否已添加到管理列表
+     */
+    fun <T : AppCompatActivity> isAddActivity(clz: Class<T>?): Boolean {
+        clz ?: return false
+        return synchronized(activities) {
+            activities.containsKey(clz)
         }
+    }
 
-        /**
-         * 判断Activity是否已添加到管理列表
-         */
-        fun <T : AppCompatActivity> isAddActivity(clz: Class<T>?): Boolean {
-            clz ?: return false
-            return activities.containsKey(clz)
-        }
-
-        /**
-         * 移除指定Class的Activity（仅需传入Activity::class）
-         */
-        fun <T : AppCompatActivity> removeActivity(clz: Class<T>?) {
-            clz ?: return
+    /**
+     * 移除指定Class的Activity
+     */
+    fun <T : AppCompatActivity> removeActivity(clz: Class<T>?) {
+        clz ?: return
+        synchronized(activities) {
             activities.remove(clz)
         }
+    }
 
-        /**
-         * 重载：通过Activity实例移除（兼容原有调用）
-         */
-        fun removeActivity(activity: AppCompatActivity?) {
-            activity ?: return
-            removeActivity(activity.javaClass)
-        }
+    /**
+     * 重载：通过Activity实例移除
+     */
+    fun removeActivity(activity: AppCompatActivity?) {
+        activity ?: return
+        removeActivity(activity.javaClass)
+    }
 
-        /**
-         * 结束指定Class的Activity（仅需传入Activity::class）
-         */
-        fun <T : AppCompatActivity> finishActivity(clz: Class<T>?) {
-            clz ?: return
-            val activity = getActivity(clz) ?: return
-            if (activity.isFinishing || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && activity.isDestroyed)) {
-                return
-            }
-            removeActivity(clz)
-            activity.finish()
-        }
+    /**
+     * 结束指定Class的Activity
+     */
+    fun <T : AppCompatActivity> finishActivity(clz: Class<T>?) {
+        clz ?: return
+        val activity = getActivity(clz)?.takeIf { it.isAlive() } ?: return
+        removeActivity(clz)
+        activity.finish()
+    }
 
-        /**
-         * 重载：通过Activity实例结束（兼容原有调用）
-         */
-        fun finishActivity(activity: AppCompatActivity?) {
-            activity ?: return
-            finishActivity(activity.javaClass)
-        }
+    /**
+     * 重载：通过Activity实例结束
+     */
+    fun finishActivity(activity: AppCompatActivity?) {
+        activity ?: return
+        finishActivity(activity.javaClass)
+    }
 
-        /**
-         * 结束所有Activity并清空管理列表
-         */
-        fun finishAllActivity() {
+    /**
+     * 结束所有Activity并清空管理列表
+     */
+    fun finishAllActivity() {
+        synchronized(activities) {
             if (activities.isEmpty()) return
-            // 1. 逆序结束Activity（更符合任务栈逻辑，避免异常）
+
+            // 逆序结束Activity（更符合任务栈逻辑）
             activities.values.reversed().forEach { activity ->
-                if (!activity.isFinishing && !activity.isDestroyed) {
-                    // 高版本用finishAndRemoveTask，彻底移除任务栈
+                if (activity.isAlive()) {
                     activity.finishAndRemoveTask()
                 }
             }
             activities.clear()
         }
+    }
 
-        /**
-         * 结束所有Activity除指定Class的Activity（仅需传入Activity::class）
-         */
-        fun <T : AppCompatActivity> finishAllExceptThisActivity(clz: Class<T>?) {
-            clz ?: return
+    /**
+     * 结束所有Activity除指定Class的Activity
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T : AppCompatActivity> finishAllExceptThisActivity(clz: Class<T>?) {
+        clz ?: return
+
+        synchronized(activities) {
             if (activities.isEmpty()) return
 
-            // 保存需要保留的Activity实例
-            val keepActivity = getActivity(clz) ?: run {
-                finishAllActivity()
+            val keepActivity = activities[clz] as? T ?: run {
+                // 如果指定的Activity不存在，结束所有
+                activities.values.reversed().forEach { activity ->
+                    if (activity.isAlive()) {
+                        activity.finishAndRemoveTask()
+                    }
+                }
+                activities.clear()
                 return
             }
 
-            // 遍历并结束其他Activity
-            activities.entries.forEach { (activityClz, _) ->
-                if (activityClz != clz) {
-                    finishActivity(activityClz as Class<out AppCompatActivity>)
+            // 结束除指定Activity外的所有Activity
+            activities.entries.toList().forEach { (activityClz, activity) ->
+                if (activityClz != clz && activity.isAlive()) {
+                    activity.finish()
                 }
             }
 
             activities.clear()
-            addActivity(keepActivity)
+            activities[clz] = keepActivity
         }
+    }
 
-        /**
-         * 重载：通过Activity实例保留（兼容原有调用）
-         */
-        fun finishAllExceptThisActivity(activity: AppCompatActivity?) {
-            activity ?: return
-            finishAllExceptThisActivity(activity.javaClass)
-        }
+    /**
+     * 重载：通过Activity实例保留
+     */
+    fun finishAllExceptThisActivity(activity: AppCompatActivity?) {
+        activity ?: return
+        finishAllExceptThisActivity(activity.javaClass)
+    }
 
-        /**
-         * 获取当前活跃的应用内AppCompatActivity
-         */
-        /**
-         * 获取当前活跃的应用内AppCompatActivity
-         */
-        fun getCurrentActivity(): AppCompatActivity? {
-            return try {
-                // 1. 通过反射获取ActivityThread中的mActivities
-                val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val currentActivityThreadMethod: Method = activityThreadClass.getMethod("currentActivityThread")
-                val activityThread = currentActivityThreadMethod.invoke(null)
+    /**
+     * 获取当前活跃的应用内AppCompatActivity
+     */
+    fun getCurrentActivity(): AppCompatActivity? {
+        return try {
+            val activityThreadClass = Class.forName("android.app.ActivityThread")
+            val currentActivityThreadMethod = activityThreadClass.getMethod("currentActivityThread")
+            val activityThread = currentActivityThreadMethod.invoke(null)
 
-                val activitiesField: Field = activityThreadClass.getDeclaredField("mActivities")
-                activitiesField.isAccessible = true
-                val systemActivities: Map<*, *> = activitiesField.get(activityThread) as Map<*, *>
+            val activitiesField = activityThreadClass.getDeclaredField("mActivities")
+            activitiesField.isAccessible = true
+            val systemActivities = activitiesField.get(activityThread) as? Map<*, *>
+                ?: return getLatestActivityFromLocal()
 
-                // 2. 遍历所有ActivityRecord，找到符合条件的Activity
-                // 修复点：处理activityRecord的可空性（Any? -> Any）
-                systemActivities.values.forEach { activityRecord ->
-                    // 第一步：判空，空则跳过当前循环
-                    activityRecord ?: return@forEach
+            for (activityRecord in systemActivities.values) {
+                activityRecord ?: continue
 
-                    // 第二步：安全获取Class（非空断言，因为已判空）
-                    val activityRecordClass = activityRecord.javaClass
+                val activityRecordClass = activityRecord.javaClass
 
-                    // 反射获取paused字段并判断
-                    val pausedField: Field = try {
-                        activityRecordClass.getDeclaredField("paused")
-                    } catch (e: NoSuchFieldException) {
-                        // 字段不存在则跳过
-                        return@forEach
-                    }
-                    pausedField.isAccessible = true
-                    val isPaused = try {
-                        pausedField.getBoolean(activityRecord)
-                    } catch (e: IllegalAccessException) {
-                        // 无法访问字段则视为暂停，跳过
-                        true
-                    }
-                    if (isPaused) return@forEach
+                val pausedField = activityRecordClass.getDeclaredField("paused")
+                    .apply { isAccessible = true }
+                if (pausedField.getBoolean(activityRecord)) continue
 
-                    // 获取Activity实例
-                    val activityField: Field = try {
-                        activityRecordClass.getDeclaredField("activity")
-                    } catch (e: NoSuchFieldException) {
-                        // 字段不存在则跳过
-                        return@forEach
-                    }
-                    activityField.isAccessible = true
-                    val activity = try {
-                        activityField.get(activityRecord) as Activity?
-                    } catch (e: IllegalAccessException) {
-                        // 无法访问字段则返回null
-                        null
-                    }
+                val activityField = activityRecordClass.getDeclaredField("activity")
+                    .apply { isAccessible = true }
+                val activity = activityField.get(activityRecord) as? Activity ?: continue
 
-                    // 三重校验：非空 + 应用内Activity + 是AppCompatActivity子类
-                    if (activity != null && isAppInternalActivity(activity) && activity is AppCompatActivity) {
-                        return activity
-                    }
+                if (isAppInternalActivity(activity) && activity is AppCompatActivity) {
+                    return activity
                 }
-                // 反射未找到，兜底获取本地最新Activity
-                getLatestActivityFromLocal()
-            } catch (e: ClassNotFoundException) {
-                e.printStackTrace()
-                getLatestActivityFromLocal()
-            } catch (e: NoSuchMethodException) {
-                e.printStackTrace()
-                getLatestActivityFromLocal()
-            } catch (e: IllegalAccessException) {
-                e.printStackTrace()
-                getLatestActivityFromLocal()
-            } catch (e: InvocationTargetException) {
-                e.printStackTrace()
-                getLatestActivityFromLocal()
-            } catch (e: NoSuchFieldException) {
-                e.printStackTrace()
-                getLatestActivityFromLocal()
             }
+            getLatestActivityFromLocal()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            getLatestActivityFromLocal()
         }
-        /**
-         * 从本地管理列表中获取最新的Activity（兜底方案）
-         */
-        private fun getLatestActivityFromLocal(): AppCompatActivity? {
+    }
+
+    /**
+     * 从本地管理列表中获取最新的Activity（兜底方案）
+     */
+    private fun getLatestActivityFromLocal(): AppCompatActivity? {
+        return synchronized(activities) {
             if (activities.isEmpty()) return null
-
-            var latestActivity: AppCompatActivity? = null
-            activities.values.forEach { activity ->
-                if (activity != null && !activity.isFinishing && (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR1 || !activity.isDestroyed)) {
-                    latestActivity = activity
-                }
-            }
-            return latestActivity
+            activities.values.lastOrNull { it.isAlive() }
         }
+    }
 
-        /**
-         * 判断Activity是否为应用内Activity（通过包名校验）
-         * 重载1：传入Activity实例
-         */
-        fun isAppInternalActivity(activity: Activity?): Boolean {
-            activity ?: return false
-            val appPackageName = getAppPackageName(activity)
-            return appPackageName == activity.packageName
+    /**
+     * 判断Activity是否为应用内Activity（通过包名校验）
+     */
+    fun isAppInternalActivity(activity: Activity?): Boolean {
+        activity ?: return false
+        val appPackageName = activity.applicationContext.packageName
+        val activityPackageName = activity.javaClass.`package`?.name ?: return false
+        return activityPackageName.startsWith(appPackageName)
+    }
+
+    /**
+     * 判断Activity是否为应用内Activity（仅传入Class）
+     */
+    fun <T : Activity> isAppInternalActivity(clz: Class<T>?): Boolean {
+        clz ?: return false
+        val appContext = getApplicationContext() ?: return false
+        val appPackageName = appContext.packageName
+        val activityPackageName = clz.`package`?.name ?: return false
+        return activityPackageName.startsWith(appPackageName)
+    }
+
+    /**
+     * 获取Activity列表（返回不可修改的Map副本）
+     */
+    fun getActivities(): Map<Class<*>, AppCompatActivity> {
+        return synchronized(activities) {
+            activities.toMap()
         }
+    }
 
-        /**
-         * 判断Activity是否为应用内Activity（通过包名校验）
-         * 重载2：仅传入Activity::class
-         */
-        fun <T : Activity> isAppInternalActivity(clz: Class<T>?): Boolean {
-            clz ?: return false
-            val appContext = getApplicationContext() ?: return false
-            val appPackageName = appContext.packageName
-            val activityPackageName = clz.`package`?.name ?: return false
-            return appPackageName == activityPackageName
-        }
+    /**
+     * 获取全局Application Context（兜底方案）
+     */
+    private fun getApplicationContext(): Context? {
+        // 优先使用已初始化的application
+        application?.let { return it.applicationContext }
 
-        /**
-         * 获取Activity列表（返回不可修改的Map，防止外部篡改）
-         */
-        fun getActivities(): Map<Class<*>, AppCompatActivity> {
-            // Kotlin中通过toMap()转为不可变Map
-            return activities.toMap()
-        }
-
-        /**
-         * 获取应用包名（工具方法，避免重复代码）
-         */
-        private fun getAppPackageName(context: Context): String {
-            return context.applicationContext.packageName
-        }
-
-        /**
-         * 获取全局Application Context（兜底方案）
-         */
-        private fun getApplicationContext(): Context? {
-            return try {
-                val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val currentActivityThreadMethod: Method = activityThreadClass.getMethod("currentActivityThread")
-                val activityThread = currentActivityThreadMethod.invoke(null)
-                val appContextField: Field = activityThreadClass.getDeclaredField("mInitialApplication")
-                appContextField.isAccessible = true
-                appContextField.get(activityThread) as Context
-            } catch (e: Exception) {
-                e.printStackTrace()
-                null
-            }
+        return try {
+            val activityThreadClass = Class.forName("android.app.ActivityThread")
+            val currentActivityThreadMethod: Method = activityThreadClass.getMethod("currentActivityThread")
+            val activityThread = currentActivityThreadMethod.invoke(null)
+            val appContextField: Field = activityThreadClass.getDeclaredField("mInitialApplication")
+            appContextField.isAccessible = true
+            appContextField.get(activityThread) as? Context
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }

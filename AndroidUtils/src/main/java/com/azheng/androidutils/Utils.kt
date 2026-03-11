@@ -2,20 +2,37 @@ package com.azheng.androidutils
 
 import android.app.Application
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Application工具类
  * 用于获取全局Application实例
+ *
+ * 使用方式：
+ * ```kotlin
+ * class MyApp : Application() {
+ *     override fun onCreate() {
+ *         super.onCreate()
+ *         Utils.init(this)
+ *     }
+ * }
+ * ```
+ *
+ * 注意：初始化后无需任何手动管理，Activity生命周期会自动处理
  */
 object Utils {
 
     private val isInitialized = AtomicBoolean(false)
-    private lateinit var application: Application
+    private var application: Application? = null
 
     /**
      * 初始化方法，在Application的onCreate中调用
      * @param app Application实例
+     *
+     * 注意：
+     * - 仅需调用一次，重复调用会被忽略
+     * - 进程重启后会自动重新初始化（因为静态变量会被清空）
      */
     fun init(app: Application) {
         if (isInitialized.compareAndSet(false, true)) {
@@ -29,10 +46,9 @@ object Utils {
      * 获取Application实例
      */
     fun getApplication(): Application {
-        check(isInitialized.get()) {
+        return application ?: throw IllegalStateException(
             "Utils未初始化，请在Application的onCreate方法中调用Utils.init(this)"
-        }
-        return application
+        )
     }
 
     /**
@@ -43,35 +59,26 @@ object Utils {
     }
 
     /**
-     * ⚠️ 重置所有工具类状态
-     *
-     * **警告：此方法会清空所有 Activity 管理状态！**
-     *
-     * 仅在以下场景使用：
-     * - 用户登出后重新初始化
-     * - 单元测试隔离
-     * - 进程异常重启恢复
-     *
-     * 使用示例：
-     * ```kotlin
-     * @OptIn(DangerousApi::class)
-     * fun logout() {
-     *     Utils.reset()
-     *     Utils.init(app) // 必须重新初始化！
-     * }
-     * ```
+     * 判断是否已初始化
      */
-    @DangerousApi
+    fun isInitialized(): Boolean = isInitialized.get()
+
+    /**
+     * 重置所有工具类状态 - 仅用于测试
+     *
+     * ⚠️ 此方法仅供单元测试使用！
+     *
+     * 正常使用中不需要调用此方法，以下场景都会自动处理：
+     * - 使用 FLAG_ACTIVITY_CLEAR_TASK 重启界面 → onActivityDestroyed 自动清理
+     * - 用户按返回键退出后再进入 → 状态保持，无需处理
+     * - 进程被系统杀死后恢复 → 静态变量自动清空，init() 重新初始化
+     *
+     * @see VisibleForTesting
+     */
+    @VisibleForTesting
     fun reset() {
         ActivityUtils.reset()
+        application = null
         isInitialized.set(false)
     }
 }
-// 定义注解
-@RequiresOptIn(
-    level = RequiresOptIn.Level.WARNING,
-    message = "这是危险操作，会清空所有状态。仅在登出/测试/进程重启时使用！"
-)
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.FUNCTION)
-annotation class DangerousApi

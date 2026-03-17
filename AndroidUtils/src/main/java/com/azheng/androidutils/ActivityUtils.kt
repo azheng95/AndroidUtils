@@ -82,6 +82,8 @@ object ActivityUtils {
             override fun onActivityDestroyed(activity: Activity) {
                 if (activity is AppCompatActivity) {
                     removeActivityInternal(activity)
+                    // 定期检查列表中是否有已销毁但未移除的 Activity
+                    cleanupDestroyedActivities()
                 }
             }
         }
@@ -90,7 +92,11 @@ object ActivityUtils {
             app.registerActivityLifecycleCallbacks(lifecycleCallbacks)
         }
     }
-
+    private fun cleanupDestroyedActivities() {
+        synchronized(activities) {
+            activities.removeAll { it.isDestroyed }
+        }
+    }
     /**
      * 重置状态 - 仅用于测试
      *

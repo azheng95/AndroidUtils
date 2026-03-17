@@ -3,6 +3,7 @@ package com.azheng.androidutils
 import android.app.Application
 import android.content.Context
 import androidx.annotation.VisibleForTesting
+import com.azheng.androidutils.strings.StringUtils
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -37,9 +38,18 @@ object Utils {
     fun init(app: Application) {
         if (isInitialized.compareAndSet(false, true)) {
             application = app
+            // 每次都尝试初始化ActivityUtils（内部自行判断是否需要注册）
+            ActivityUtils.init(app)
+            // 初始化StringManager
+            StringUtils.getInstance().init(
+                application = app,
+                contextProvider = {
+                    // 优先返回当前Activity的Context（用于语言切换场景）
+                    // 如果没有Activity，则返回Application Context
+                    ActivityUtils.getTopActivity() ?: app
+                }
+            )
         }
-        // 每次都尝试初始化ActivityUtils（内部自行判断是否需要注册）
-        ActivityUtils.init(app)
     }
 
     /**

@@ -58,7 +58,4 @@ dependencies {
     // Kotlin 反射库：用于反射 Kotlin data class 类对象，2.0.0 请修改成当前项目 Kotlin 的版本号
     implementation 'org.jetbrains.kotlin:kotlin-reflect:2.0.0'
 
-//    implementation 'io.github.oshai:kotlin-logging-jvm:7.0.5'
-//    implementation 'uk.uuid.slf4j:slf4j-android:2.0.17-0'
-
 }

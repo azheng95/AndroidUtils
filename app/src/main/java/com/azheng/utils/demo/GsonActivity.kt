@@ -1,5 +1,6 @@
 package com.azheng.utils.demo
 
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
@@ -7,7 +8,15 @@ import com.azheng.androidutils.GsonUtils
 import com.azheng.utils.demo.bean.Company
 import com.azheng.utils.demo.bean.User
 import com.azheng.utils.demo.databinding.ActivityGsonBinding
+import com.google.gson.Gson
+import com.google.gson.TypeAdapter
+import com.google.gson.TypeAdapterFactory
 import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * GsonUtils 使用示例
@@ -64,6 +73,21 @@ class GsonActivity : AppCompatActivity() {
             demonstrateTypeToken()
         }
 
+        // 自定义适配器示例
+        binding.btnCustomAdapter.setOnClickListener {
+            demonstrateCustomAdapters()
+        }
+
+        // Gson 实例管理示例
+        binding.btnGsonManagement.setOnClickListener {
+            demonstrateGsonManagement()
+        }
+
+        // Set 和高级类型示例
+        binding.btnAdvancedTypes.setOnClickListener {
+            demonstrateAdvancedTypes()
+        }
+
         // 清空日志
         binding.btnClear.setOnClickListener {
             binding.tvResult.text = ""
@@ -114,6 +138,12 @@ class GsonActivity : AppCompatActivity() {
         val mapJson = GsonUtils.toJson(userMap)
         appendResult("\nMap<String, User> -> JSON:")
         appendResult(mapJson)
+
+        // 使用指定类型序列化
+        val anyData: Any = userList
+        val typedJson = GsonUtils.toJson(anyData, GsonUtils.getListType(User::class.java))
+        appendResult("\n使用指定 Type 序列化:")
+        appendResult(typedJson)
     }
 
     /**
@@ -143,6 +173,11 @@ class GsonActivity : AppCompatActivity() {
         // 空字符串测试
         val emptyResult = GsonUtils.fromJsonToObject<User>("")
         appendResult("空字符串结果: $emptyResult")
+
+        // 使用 Type 解析
+        val type = User::class.java
+        val user4: User = GsonUtils.fromJson(json, type)
+        appendResult("使用 Type 解析: $user4")
     }
 
     /**
@@ -172,6 +207,11 @@ class GsonActivity : AppCompatActivity() {
         // 解析失败返回默认值（使用完全无效的 JSON）
         val defaultList = GsonUtils.fromJsonToList<User>("这不是JSON")
         appendResult("解析失败返回默认空列表: $defaultList")
+
+        // 使用自定义默认值
+        val customDefault = listOf(User(0, "默认用户", null, 0))
+        val resultWithDefault = GsonUtils.fromJsonToList<User>("invalid", customDefault)
+        appendResult("自定义默认值: $resultWithDefault")
     }
 
     /**
@@ -207,20 +247,28 @@ class GsonActivity : AppCompatActivity() {
         val mutableMap = GsonUtils.fromJsonToMutableMap<String, User>(userMapJson)
         mutableMap["newUser"] = User(4, "新用户", null, 25)
         appendResult("\nMutableMap 添加元素后大小: ${mutableMap.size}")
+
+        // 嵌套 Map
+        val nestedMapJson = """
+            {
+                "level1": {
+                    "level2": {"value": 100}
+                }
+            }
+        """.trimIndent()
+        val nestedMap = GsonUtils.fromJsonToMap<String, Map<String, Any>>(nestedMapJson)
+        appendResult("\n嵌套 Map: $nestedMap")
     }
 
     /**
      * 示例5: 安全解析（异常处理）
-     *
-     * 注意：GsonFactory 具有强大的容错能力，可以解析很多不规范的 JSON
-     * 本示例使用完全无效的数据来演示异常处理
      */
     private fun demonstrateSafeParse() {
         appendResult("===== 安全解析示例 =====")
         appendResult("💡 注意: GsonFactory 有强大的容错能力")
 
         // 1. GsonFactory 容错示例：缺少引号的 key 也能解析
-        val lenientJson = """{"id":1,"name":"张三",age:25}"""  // age 缺少引号
+        val lenientJson = """{"id":1,"name":"张三",age:25}"""
         appendResult("\n【容错测试】缺少引号的 JSON:")
         appendResult("  输入: $lenientJson")
         val lenientResult = GsonUtils.fromJsonToObject<User>(lenientJson)
@@ -335,6 +383,341 @@ class GsonActivity : AppCompatActivity() {
         )
         val result2: List<Map<String, User>> = GsonUtils.fromJson(complexJson, listMapType)
         appendResult("\n使用 getType 构建类型解析结果大小: ${result2.size}")
+
+        // 多层嵌套类型
+        appendResult("\n===== 多层嵌套类型 =====")
+        val deepNestedJson = """
+            {
+                "data": [
+                    {"users": [{"id":1,"name":"用户1","age":20}]},
+                    {"users": [{"id":2,"name":"用户2","age":25}]}
+                ]
+            }
+        """.trimIndent()
+
+        // 构建 Map<String, List<Map<String, List<User>>>> 类型
+        val innerListType = GsonUtils.getListType(User::class.java)
+        val innerMapType = GsonUtils.getMapType(String::class.java, innerListType)
+        val outerListType = GsonUtils.getListType(innerMapType)
+        val finalType = GsonUtils.getMapType(String::class.java, outerListType)
+
+        val deepResult: Map<String, List<Map<String, List<User>>>> =
+            GsonUtils.fromJson(deepNestedJson, finalType)
+        appendResult("深层嵌套解析: data 列表大小 = ${deepResult["data"]?.size}")
+    }
+
+    /**
+     * 示例8: 自定义适配器
+     */
+    private fun demonstrateCustomAdapters() {
+        appendResult("===== 自定义适配器示例 =====")
+
+        // 1. 注册 TypeAdapter（精确类型匹配）
+        appendResult("\n【1. TypeAdapter 注册】")
+
+        // Date 适配器
+        val dateAdapter = object : TypeAdapter<Date>() {
+            private val format = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+            override fun write(out: JsonWriter, value: Date?) {
+                if (value == null) {
+                    out.nullValue()
+                } else {
+                    out.value(format.format(value))
+                }
+            }
+
+            override fun read(reader: JsonReader): Date? {
+                return try {
+                    format.parse(reader.nextString())
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+
+        GsonUtils.registerTypeAdapter<Date>(dateAdapter)
+        appendResult("  ✅ 已注册 Date TypeAdapter")
+
+        // 测试 Date 序列化
+        data class Event(val name: String, val date: Date)
+
+        val event = Event("会议", Date())
+        val eventJson = GsonUtils.toJson(event)
+        appendResult("  Event 序列化: $eventJson")
+
+        // 反序列化
+        val parsedEvent = GsonUtils.fromJsonToObject<Event>(eventJson)
+        appendResult("  Event 反序列化: $parsedEvent")
+
+        // 2. 注册 TypeHierarchyAdapter（处理抽象类/接口）
+        appendResult("\n【2. TypeHierarchyAdapter 注册】")
+
+        // Uri 适配器示例
+        val uriAdapter = object : TypeAdapter<Uri>() {
+            override fun write(out: JsonWriter, value: Uri?) {
+                if (value == null) {
+                    out.nullValue()
+                } else {
+                    out.value(value.toString())
+                }
+            }
+
+            override fun read(reader: JsonReader): Uri? {
+                return try {
+                    Uri.parse(reader.nextString())
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+
+        GsonUtils.registerTypeHierarchyAdapter<Uri>(uriAdapter)
+        appendResult("  ✅ 已注册 Uri TypeHierarchyAdapter")
+
+        // 测试 Uri 序列化
+        data class Link(val title: String, val uri: Uri?)
+
+        val link = Link("百度", Uri.parse("https://www.baidu.com"))
+        val linkJson = GsonUtils.toJson(link)
+        appendResult("  Link 序列化: $linkJson")
+
+        val parsedLink = GsonUtils.fromJsonToObject<Link>(linkJson)
+        appendResult("  Link 反序列化: $parsedLink")
+
+        // 3. 查看已注册的适配器
+        appendResult("\n【3. 已注册的适配器】")
+        appendResult("  TypeAdapter 类型: ${GsonUtils.getRegisteredAdapterTypes()}")
+        appendResult("  TypeHierarchyAdapter 类型: ${GsonUtils.getRegisteredHierarchyTypes()}")
+
+        // 4. 检查适配器
+        appendResult("\n【4. 检查适配器】")
+        appendResult("  是否有 Date 适配器: ${GsonUtils.hasTypeAdapter(Date::class.java)}")
+        appendResult("  是否有 Uri 层次适配器: ${GsonUtils.hasTypeHierarchyAdapter(Uri::class.java)}")
+        appendResult("  是否有 String 适配器: ${GsonUtils.hasTypeAdapter(String::class.java)}")
+
+        // 5. TypeAdapterFactory 示例
+        appendResult("\n【5. TypeAdapterFactory 注册】")
+
+        // 创建一个简单的日志工厂
+        val loggingFactory = object : TypeAdapterFactory {
+            override fun <T> create(gson: Gson, type: TypeToken<T>): TypeAdapter<T>? {
+                // 这里返回 null 表示不处理，让 Gson 使用默认适配器
+                // 实际使用中可以在这里添加日志或包装逻辑
+                return null
+            }
+        }
+
+        GsonUtils.registerTypeAdapterFactory(loggingFactory)
+        appendResult("  ✅ 已注册 LoggingFactory")
+
+        // 6. InstanceCreator 示例（修复：使用正确的语法）
+        appendResult("\n【6. InstanceCreator 注册】")
+
+        // 为 User 注册默认实例创建器 - 使用命名参数明确指定
+        GsonUtils.registerInstanceCreator<User>(
+            creator = { _ -> User(0, "默认用户", null, 0) }
+        )
+        appendResult("  ✅ 已注册 User InstanceCreator")
+
+        // 测试空 JSON 对象解析
+        val emptyUser = GsonUtils.fromJsonToObject<User>("{}")
+        appendResult("  空 JSON 解析结果: $emptyUser")
+
+        // 7. 抽象类完整支持
+        appendResult("\n【7. 抽象类完整支持】")
+        GsonUtils.registerAbstractTypeSupport<Uri>(
+            typeAdapter = uriAdapter,
+            defaultValue = Uri.EMPTY
+        )
+        appendResult("  ✅ 已注册 Uri 完整支持（包含 InstanceCreator）")
+
+        // 清理（可选）
+        appendResult("\n【清理】")
+        // GsonUtils.removeTypeAdapter(Date::class.java)
+        // GsonUtils.removeTypeHierarchyAdapter(Uri::class.java)
+        appendResult("  💡 适配器保持注册状态，后续可继续使用")
+    }
+
+    /**
+     * 示例9: Gson 实例管理
+     */
+    private fun demonstrateGsonManagement() {
+        appendResult("===== Gson 实例管理示例 =====")
+
+        // 1. 获取默认 Gson
+        appendResult("\n【1. 默认 Gson 实例】")
+        val defaultGson = GsonUtils.gson
+        appendResult("  默认 Gson: ${defaultGson.javaClass.simpleName}")
+
+        // 2. 获取日志专用 Gson
+        val logGson = GsonUtils.gson4LogUtils
+        appendResult("  日志 Gson: ${logGson.javaClass.simpleName}")
+
+        // 3. 创建自定义 Gson
+        appendResult("\n【2. 自定义 Gson 实例】")
+
+        // 使用 newGsonBuilder 创建（包含已注册的适配器）
+        val customGson1 = GsonUtils.newGsonBuilder()
+            .setDateFormat("yyyy年MM月dd日")
+            .create()
+        GsonUtils.setGson("custom_date", customGson1)
+        appendResult("  ✅ 创建并缓存 'custom_date' Gson")
+
+        // 创建另一个自定义实例
+        val customGson2 = GsonUtils.newGsonBuilder()
+            .excludeFieldsWithoutExposeAnnotation()
+            .create()
+        GsonUtils.setGson("expose_only", customGson2)
+        appendResult("  ✅ 创建并缓存 'expose_only' Gson")
+
+        // 4. 获取已缓存的 Gson
+        appendResult("\n【3. 获取缓存的 Gson】")
+        val cached = GsonUtils.getGson("custom_date")
+        appendResult("  获取 'custom_date': ${if (cached != null) "成功" else "失败"}")
+        appendResult("  是否存在 'custom_date': ${GsonUtils.containsGson("custom_date")}")
+        appendResult("  是否存在 'not_exists': ${GsonUtils.containsGson("not_exists")}")
+
+        // 5. 查看所有已注册的 key
+        appendResult("\n【4. 所有已注册的 Gson】")
+        val keys = GsonUtils.getRegisteredKeys()
+        keys.forEach { appendResult("  - $it") }
+
+        // 6. 使用特定 Gson 进行序列化
+        appendResult("\n【5. 使用特定 Gson】")
+        val dateGson = GsonUtils.getGson("custom_date")
+        if (dateGson != null) {
+            data class DateTest(val date: Date)
+
+            val test = DateTest(Date())
+            val json = dateGson.toJson(test)
+            appendResult("  使用 custom_date Gson: $json")
+        }
+
+        // 7. 设置代理 Gson
+        appendResult("\n【6. 设置代理 Gson】")
+        val proxyGson = GsonUtils.newGsonBuilder()
+            .serializeNulls()
+            .setPrettyPrinting()
+            .create()
+        GsonUtils.setGsonDelegate(proxyGson)
+        appendResult("  ✅ 已设置新的代理 Gson")
+
+        // 8. 刷新 Gson 实例
+        appendResult("\n【7. 刷新 Gson 实例】")
+        GsonUtils.refreshGsonInstance()
+        appendResult("  ✅ 已刷新主 Gson 实例")
+
+        // 9. 移除缓存的 Gson
+        appendResult("\n【8. 清理】")
+        val removed = GsonUtils.removeGson("custom_date")
+        appendResult("  移除 'custom_date': ${if (removed != null) "成功" else "不存在"}")
+
+        GsonUtils.removeGson("expose_only")
+        appendResult("  移除 'expose_only': 成功")
+
+        appendResult("  当前注册的 Gson: ${GsonUtils.getRegisteredKeys()}")
+    }
+
+    /**
+     * 示例10: Set 和高级类型
+     */
+    private fun demonstrateAdvancedTypes() {
+        appendResult("===== 高级类型示例 =====")
+
+        // 1. Set 反序列化
+        appendResult("\n【1. Set 反序列化】")
+        val setJson = """[1, 2, 3, 2, 1, 4, 5]"""
+
+        val intSet = GsonUtils.fromJsonToSet<Int>(setJson)
+        appendResult("  JSON: $setJson")
+        appendResult("  Set<Int>: $intSet")
+        appendResult("  大小: ${intSet.size} (去重后)")
+
+        // MutableSet
+        val mutableSet = GsonUtils.fromJsonToMutableSet<Int>(setJson)
+        mutableSet.add(6)
+        appendResult("  MutableSet 添加 6 后: $mutableSet")
+
+        // User Set
+        val userSetJson = """
+            [
+                {"id":1,"name":"张三","age":25},
+                {"id":2,"name":"李四","age":30},
+                {"id":1,"name":"张三","age":25}
+            ]
+        """.trimIndent()
+        val userSet = GsonUtils.fromJsonToSet<User>(userSetJson)
+        appendResult("  User Set 大小: ${userSet.size}")
+
+        // 2. Array Type
+        appendResult("\n【2. Array 类型】")
+        val arrayJson = """[1, 2, 3, 4, 5]"""
+        val arrayType = GsonUtils.getArrayType(Int::class.javaObjectType)
+        val intArray: Array<Int> = GsonUtils.fromJson(arrayJson, arrayType)
+        appendResult("  Array<Int>: ${intArray.contentToString()}")
+
+        // 3. Type 工具方法
+        appendResult("\n【3. Type 构建工具】")
+
+        // 构建各种类型
+        val listType = GsonUtils.getListType(User::class.java)
+        appendResult("  List<User> Type: $listType")
+
+        val setType = GsonUtils.getSetType(String::class.java)
+        appendResult("  Set<String> Type: $setType")
+
+        val mapType = GsonUtils.getMapType(String::class.java, User::class.java)
+        appendResult("  Map<String, User> Type: $mapType")
+
+        // 复杂嵌套类型
+        val nestedType = GsonUtils.getType(
+            Map::class.java,
+            String::class.java,
+            GsonUtils.getListType(User::class.java)
+        )
+        appendResult("  Map<String, List<User>> Type: $nestedType")
+
+        // 4. 使用构建的类型进行解析
+        appendResult("\n【4. 使用构建的类型解析】")
+        val nestedJson = """
+            {
+                "team1": [{"id":1,"name":"成员1","age":25}],
+                "team2": [{"id":2,"name":"成员2","age":30}]
+            }
+        """.trimIndent()
+
+        val teamData: Map<String, List<User>> = GsonUtils.fromJson(nestedJson, nestedType)
+        teamData.forEach { (team, members) ->
+            appendResult("  $team: ${members.map { it.name }}")
+        }
+
+        // 5. Type 缓存
+        appendResult("\n【5. Type 缓存】")
+        val type1 = GsonUtils.getListType(User::class.java)
+        val type2 = GsonUtils.getListType(User::class.java)
+        appendResult("  相同类型是否复用: ${type1 === type2}")
+
+        // 清空缓存
+        GsonUtils.clearTypeCache()
+        val type3 = GsonUtils.getListType(User::class.java)
+        appendResult("  清空缓存后: ${type1 === type3}")
+
+        // 6. 解析回调
+        appendResult("\n【6. 解析异常回调】")
+        val originalHandler = GsonUtils.parseExceptionHandler
+        var exceptionCaught = false
+
+        GsonUtils.parseExceptionHandler = { e, _ ->
+            exceptionCaught = true
+            appendResult("  捕获异常: ${e.javaClass.simpleName}")
+        }
+
+        GsonUtils.fromJsonToObject<User>("invalid_json_data")
+        appendResult("  是否捕获异常: $exceptionCaught")
+
+        // 恢复原始处理器
+        GsonUtils.parseExceptionHandler = originalHandler
     }
 
     /**
@@ -343,6 +726,13 @@ class GsonActivity : AppCompatActivity() {
     private fun appendResult(text: String) {
         val current = binding.tvResult.text.toString()
         binding.tvResult.text = if (current.isEmpty()) text else "$current\n$text"
+
+        // 自动滚动到底部
+        binding.tvResult.post {
+            val scrollView = binding.tvResult.parent as? android.widget.ScrollView
+            scrollView?.fullScroll(android.widget.ScrollView.FOCUS_DOWN)
+        }
+
         Log.d(TAG, text)
     }
 }
